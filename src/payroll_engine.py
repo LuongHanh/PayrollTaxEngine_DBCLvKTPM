@@ -22,7 +22,8 @@ def calculateReductions(dependents):
         
     # 2. Tính giảm trừ bản thân (11tr) và người phụ thuộc (4.4tr/người)
     PERSONAL_REDUCTION = 11000000
-    DEPENDENT_REDUCTION = 4400000 # Hằng số này sẽ được AI đổi thành 5.5tr ở phần sau
+    # DEPENDENT_REDUCTION = 4400000 # Hằng số này sẽ được AI đổi thành 5.5tr ở phần sau
+    DEPENDENT_REDUCTION = 5500000 # Đã cập nhật từ 4.4tr lên 5.5tr theo luật mới
     
     return PERSONAL_REDUCTION + (dependents * DEPENDENT_REDUCTION)
 
