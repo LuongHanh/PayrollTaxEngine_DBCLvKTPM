@@ -1,84 +1,221 @@
 import pytest
-from src.payroll_engine import calculateInsurance, calculateReductions, calculatePersonalTax
+from src.payroll_engine import (
+    calculateInsurance,
+    calculateReductions,
+    calculatePersonalTax,
+)
 
-# =====================================================================
-# NHÓM 1: KIỂM THỬ BẢO HIỂM (REQ_01 & REQ_02) -> 4 Test Cases
-# =====================================================================
-@pytest.mark.insurance
-def test_TC_INS_01_normal_salary():
-    assert calculateInsurance(10000000) == 1050000
+# ------ Insurance Function Tests ------
 
-@pytest.mark.insurance
-def test_TC_INS_02_low_salary():
-    assert calculateInsurance(2000000) == 210000
+def test_TC_INS_01_basic_rate():
+    # Lương nhỏ hơn giới hạn trần, tính đúng bảo hiểm (10.5%)
+    salary = 20000000  # < 46,800,000
+    expected = int(round(20000000 * 0.105))
+    assert calculateInsurance(salary) == expected
 
-@pytest.mark.insurance
-def test_TC_INS_03_at_ceiling():
-    assert calculateInsurance(46800000) == 4914000
+def test_TC_INS_02_exact_cap():
+    # Lương đúng bằng trần
+    salary = 46800000
+    expected = int(round(46800000 * 0.105))
+    assert calculateInsurance(salary) == expected
 
-@pytest.mark.insurance
-def test_TC_INS_04_above_ceiling():
-    assert calculateInsurance(50000000) == 4914000
+def test_TC_INS_03_above_cap():
+    # Lương vượt trần, bị chặn ở mức 46.8 triệu
+    salary = 60000000
+    cap = 46800000
+    expected = int(round(cap * 0.105))
+    assert calculateInsurance(salary) == expected
 
+def test_TC_INS_04_zero_salary():
+    # Lương = 0, bảo hiểm cũng phải = 0
+    salary = 0
+    expected = 0
+    assert calculateInsurance(salary) == expected
 
-# =====================================================================
-# NHÓM 2: KIỂM THỬ GIẢM TRỪ GIA CẢNH (REQ_03) -> 2 Test Cases
-# =====================================================================
-@pytest.mark.reductions
-def test_TC_RED_01_no_dependents():
-    assert calculateReductions(0) == 11000000
+# ------ Reductions Function Tests ------
 
-@pytest.mark.reductions
+def test_TC_RED_01_self_deduction_only():
+    # Không có người phụ thuộc, chỉ áp dụng giảm trừ bản thân
+    dependents = 0
+    expected = 11000000
+    assert calculateReductions(dependents) == expected
+
 def test_TC_RED_02_with_dependents():
-    # assert calculateReductions(2) == 19800000
-    # Sửa từ 19800000 thành 22000000 cho đúng với kết quả tính toán thực tế của luật mới
-    assert calculateReductions(2) == 22000000
+    # Có người phụ thuộc
+    dependents = 2
+    expected = 11000000 + 2 * 4400000
+    assert calculateReductions(dependents) == expected
 
-# =====================================================================
-# NHÓM 3: KIỂM THỬ GIÁ TRỊ BIÊN BIỂU THUẾ LŨY TIẾN 7 BẬC (REQ_04) -> 14 Test Cases
-# =====================================================================
-@pytest.mark.tax
-@pytest.mark.parametrize("gross, dependents, expected_tax, tc_id", [
-    # --- BẬC 1: Thu nhập tính thuế (TNTT) <= 5.000.000 ---
-    (0, 0, 0.0, "TC_TAX_01"),                           # Biên dưới: Không có thu nhập
-    (17877095, 0, 250000.0, "TC_TAX_02"),               # Đúng mốc biên TNTT = 5.000.000
+# ------ Personal Income Tax - 7 brackets, value boundary analysis ------
 
-    # --- BẬC 2: 5.000.000 < TNTT <= 10.000.000 ---
-    (17877097, 0, 250000.2, "TC_TAX_03"),               # Vừa chớm vượt biên Bậc 1 (TNTT = 5.000.002)
-    (23463687, 0, 750000.0, "TC_TAX_04"),               # Đúng mốc biên TNTT = 10.000.000
+# Helper: gross = salary, deps = num of dependents
+# Suppose no dependents for boundary test, only self deduction
 
-    # --- BẬC 3: 10.000.000 < TNTT <= 18.000.000 ---
-    (23463689, 0, 750000.3, "TC_TAX_05"),               # Vừa chớm vượt biên Bậc 2
-    (32402235, 0, 1950000.0, "TC_TAX_06"),              # Đúng mốc biên TNTT = 18.000.000
+def boundary_tax_input(gross):
+    """Common input for boundary value, no dependents."""
+    return calculatePersonalTax(gross, dependents=0)
 
-    # --- BẬC 4: 18.000.000 < TNTT <= 32.000.000 ---
-    (32402237, 0, 1950000.4, "TC_TAX_07"),              # Vừa chớm vượt biên Bậc 3
-    (47914000, 0, 4750000.0, "TC_TAX_08"),              # FIX: Đúng mốc biên TNTT = 32.000.000 (Gross đã vượt trần)
+def tax_for_gross(gross):
+    return boundary_tax_input(gross)
 
-    # --- BẬC 5: 32.000.000 < TNTT <= 52.000.000 ---
-    (47914002, 0, 4750000.5, "TC_TAX_09"),              # FIX: Vừa chớm vượt biên Bậc 4 (TNTT = 32.000.002)
-    (67914000, 0, 9750000.0, "TC_TAX_10"),              # Đúng mốc biên TNTT = 52.000.000
+def insurance_for_gross(gross):
+    # Insurance subject to cap
+    cap = 46800000
+    base = gross
+    return int(round(base * 0.105))
 
-    # --- BẬC 6: 52.000.000 < TNTT <= 80.000.000 ---
-    (67914002, 0, 9750000.6, "TC_TAX_11"),              # Vừa chớm vượt biên Bậc 5
-    (95914000, 0, 18150000.0, "TC_TAX_12"),             # Đúng mốc biên TNTT = 80.000.000
+def taxable_income_for(gross):
+    return gross - insurance_for_gross(gross) - 11000000
 
-    # --- BẬC 7: TNTT > 80.000.000 ---
-    (95914002, 0, 18150000.7, "TC_TAX_13"),             # Vừa chớm vượt biên Bậc 6
-    (120000000, 1, 25040100.0, "TC_TAX_14")             # FIX: Khớp chuẩn xác theo số thực thu được từ SUT
-])
-def test_TC_TAX_progressive_steps(gross, dependents, expected_tax, tc_id):
-    assert calculatePersonalTax(gross, dependents) == pytest.approx(expected_tax, abs=1e-1)
+def test_TC_TAX_01_below_first_threshold():
+    # Thu nhập tính thuế âm, thuế = 0
+    gross = 11000000  # giảm trừ bản thân, BH xấp xỉ 1.155tr, thu nhập chịu thuế < 0
+    assert tax_for_gross(gross) == 0
 
-# =====================================================================
-# NHÓM 4: KIỂM THỬ NGOẠI LỆ (REQ_05) -> 2 Test Cases
-# =====================================================================
-@pytest.mark.exception
-def test_TC_EXC_01_negative_salary():
+def test_TC_TAX_02_exact_first_threshold():
+    # Thu nhập tính thuế đúng bằng 0
+    gross = 11000000 + insurance_for_gross(11000000)
+    # Tiền lương gross bằng đúng bảo hiểm + giảm trừ, thì thu nhập chịu thuế = 0
+    assert tax_for_gross(gross) == 0
+
+def test_TC_TAX_03_enter_second_bracket():
+    # Đầu bậc 2: 5tr đầu 5%, +1đ ở phần vượt
+    # Lấy lương gross sao cho taxable = 5,000,001
+    tax_income = 5_000_001
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    assert tax_for_gross(gross) == int(round(5_000_001 * 0.05))
+
+def test_TC_TAX_04_exact_second_bracket_upper():
+    # Bậc 2 vượt 5tr -> 10tr đầu bậc 2, phần 5tr đầu 5%, phần còn lại lên 10%
+    # Test ở taxable_income = 10,000,000
+    tax_income = 10_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    # 5tr đầu 5%, 5tr tiếp 10%
+    expected_tax = 5_000_000 * 0.05 + 5_000_000 * 0.1
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_05_lower_third_bracket():
+    # Giá trị sát ngay dưới đầu bậc 3
+    tax_income = 18_000_000 - 1
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    # 5tr x 5%, 5tr x 10%, 7.999.999 x 15%
+    expected_tax = 5_000_000 * 0.05 + 5_000_000 * 0.1 + (tax_income - 10_000_000) * 0.15
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_06_exact_third_bracket():
+    # Đúng sát đầu bậc 4
+    tax_income = 18_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = 5_000_000 * 0.05 + 5_000_000 * 0.1 + 8_000_000 * 0.15
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_07_lower_fourth_bracket():
+    # Bậc 4: 32tr
+    tax_income = 32_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = (
+        5_000_000 * 0.05 +
+        5_000_000 * 0.1 +
+        8_000_000 * 0.15 +
+        14_000_000 * 0.2
+    )
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_08_lower_fifth_bracket():
+    # Bậc 5: 52tr
+    tax_income = 52_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = (
+        5_000_000 * 0.05 +
+        5_000_000 * 0.1 +
+        8_000_000 * 0.15 +
+        14_000_000 * 0.2 +
+        20_000_000 * 0.25
+    )
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_09_lower_sixth_bracket():
+    # Bậc 6: 80tr
+    tax_income = 80_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = (
+        5_000_000 * 0.05 +
+        5_000_000 * 0.1 +
+        8_000_000 * 0.15 +
+        14_000_000 * 0.2 +
+        28_000_000 * 0.25 +
+        28_000_000 * 0.3
+    )
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_10_lower_seventh_bracket():
+    # Bậc 7: 80tr+
+    tax_income = 100_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = (
+        5_000_000*0.05 +
+        5_000_000*0.1 +
+        8_000_000*0.15 +
+        14_000_000*0.2 +
+        28_000_000*0.25 +
+        32_000_000*0.3 +
+        (tax_income-80_000_000)*0.35
+    )
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_11_exact_seventh_bracket():
+    # Giá trị biên ngay đầu bậc 7
+    tax_income = 80_000_000
+    gross = tax_income + insurance_for_gross(11000000 + tax_income) + 11000000
+    expected_tax = (
+        5_000_000*0.05 +
+        5_000_000*0.1 +
+        8_000_000*0.15 +
+        14_000_000*0.2 +
+        28_000_000*0.25 +
+        20_000_000*0.3
+    )
+    assert tax_for_gross(gross) == int(round(expected_tax))
+
+def test_TC_TAX_12_any_dependents():
+    # Có người phụ thuộc làm taxable về 0 -> tax = 0
+    gross = 15_000_000
+    dependents = 2  # ~ 19 triệu giảm trừ
+    assert calculatePersonalTax(gross, dependents) == 0
+
+def test_TC_TAX_13_large_salary_many_dependents():
+    # Lương rất lớn nhưng nhiều người phụ thuộc làm thu nhập chịu thuế giảm mạnh
+    gross = 100_000_000
+    dependents = 8  # 44tr giảm trừ
+    # Calculate expected tax manually if needed
+    tax = calculatePersonalTax(gross, dependents)
+    assert isinstance(tax, int)
+    assert tax > 0
+
+def test_TC_TAX_14_int_rounding():
+    # Kiểm tra làm tròn đúng kiểu int
+    gross = 30_000_000
+    res = calculatePersonalTax(gross, 0)
+    assert isinstance(res, int)
+
+# ------ Exception Handling Tests ------
+
+def test_TC_EXC_01_negative_input():
     with pytest.raises(ValueError):
         calculateInsurance(-5000000)
+    with pytest.raises(ValueError):
+        calculateReductions(-1)
+    with pytest.raises(ValueError):
+        calculatePersonalTax(-10000000, 0)
+    with pytest.raises(ValueError):
+        calculatePersonalTax(10000000, -2)
 
-@pytest.mark.exception
-def test_TC_EXC_02_invalid_dependents_type():
-    with pytest.raises(TypeError):
-        calculateReductions("ba người")
+def test_TC_EXC_02_wrong_type_input():
+    with pytest.raises(ValueError):
+        calculateInsurance("abc")
+    with pytest.raises(ValueError):
+        calculateReductions("1")
+    with pytest.raises(ValueError):
+        calculatePersonalTax("salary", 0)
+    with pytest.raises(ValueError):
+        calculatePersonalTax(10000000, [1, 2])

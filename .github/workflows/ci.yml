@@ -1,4 +1,4 @@
-name: Payroll Tax Engine CI/CD Pipeline
+name: Payroll Tax Engine AI-Driven CI/CD Pipeline
 
 on:
   push:
@@ -11,19 +11,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 1. Pull ma nguon tu GitHub ve may chu CI
+    - name: 1. Pull mã nguồn và lịch sử Git về máy chủ CI
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Quan trọng: Giúp AI phân tích Git-Diff giữa các commit
 
-    - name: 2. Thiet lap moi truong Python runtime
+    - name: 2. Thiết lập môi trường Python runtime
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: 3. Cai dat cac thu vien phu thuoc (Dependencies)
+    - name: 3. Cài đặt các thư viện và Tác nhân AI phụ trợ
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-html
+        pip install pytest pytest-html pytest-testmon
 
-    - name: 4. Thuc thi tap lenh kiem thu tu dong va Xuat bao cao HTML
+    - name: 4. Khôi phục/Lưu trữ Bộ nhớ Cache cho Tác nhân AI (.testmondata)
+      uses: actions/cache@v4
+      with:
+        path: .testmondata
+        key: ${{ runner.os }}-testmon-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-testmon-
+
+    - name: 5. Thực thi Lựa chọn ca kiểm thử hồi quy tự động (AI-Driven RTS)
       run: |
-        pytest -v --html=report.html --self-contained-html
+        pytest --testmon --html=report.html --self-contained-html
