@@ -1,87 +1,85 @@
-from typing import Union
-
-INSURANCE_CEILING = 46800000  # VNĐ
-INSURANCE_BHXH_RATE = 0.08    # 8% BHXH
-INSURANCE_BHYT_RATE = 0.015   # 1.5% BHYT
-INSURANCE_BHTN_RATE = 0.01    # 1% BHTN
-
-SELF_DEDUCTION = 11000000     # VNĐ
-DEPENDENT_DEDUCTION = 4400000 # VNĐ per dependent
-
-PERSONAL_TAX_BRACKETS = [
-    (0,        5000000,   0.05,     0),
-    (5000000,  10000000,  0.10, 250000),
-    (10000000, 18000000,  0.15, 750000),
-    (18000000, 32000000,  0.20, 1950000),
-    (32000000, 52000000,  0.25, 4750000),
-    (52000000, 80000000,  0.30, 9750000),
-    (80000000, float('inf'), 0.35, 18150000)
-]
-
-
-def calculateInsurance(grossSalary: Union[int, float]) -> int:
+def calculateInsurance(grossSalary):
     """
-    Tính khoản trích đóng bảo hiểm xã hội, y tế, thất nghiệp tổng cộng, chặn trần tại 46.800.000 VNĐ.
-    Trích đóng: BHXH 8%, BHYT 1.5%, BHTN 1%.
+    Tính số tiền bảo hiểm phải đóng từ lương gross.
+    8% BHXH + 1.5% BHYT + 1% BHTN, tổng 10.5%. Chặn trần tại 46,800,000 VNĐ.
     """
-    try:
-        if not isinstance(grossSalary, (int, float)) or grossSalary < 0:
-            raise ValueError("grossSalary phải là số không âm.")
+    CAP = 46800000
+    RATE = 0.105
 
-        salary_for_insurance = min(grossSalary, INSURANCE_CEILING)
-        bhxh = salary_for_insurance * INSURANCE_BHXH_RATE
-        bhyt = salary_for_insurance * INSURANCE_BHYT_RATE
-        bhtn = salary_for_insurance * INSURANCE_BHTN_RATE
-        total = int(round(bhxh + bhyt + bhtn))
-        return total
-    except Exception as e:
-        raise ValueError(f"Lỗi khi tính bảo hiểm: {e}")
+    if not isinstance(grossSalary, (int, float)) or isinstance(grossSalary, bool):
+        raise ValueError("grossSalary phải là số (int hoặc float).")
+    if grossSalary < 0:
+        raise ValueError("grossSalary không được là số âm.")
+    if grossSalary == 0:
+        return 0
+    base_salary = min(grossSalary, CAP)
+    insurance = base_salary * RATE
+    return int(round(insurance))
 
 
-def calculateReductions(dependents: int) -> int:
+def calculateReductions(dependents):
     """
-    Tính tổng số tiền giảm trừ: giảm trừ bản thân + giảm trừ người phụ thuộc
+    Tính giảm trừ gia cảnh: bản thân 11tr, mỗi người phụ thuộc 4.4tr.
     """
-    try:
-        if not isinstance(dependents, int) or dependents < 0:
-            raise ValueError("Số người phụ thuộc phải là số nguyên không âm.")
-        total_reduction = SELF_DEDUCTION + dependents * DEPENDENT_DEDUCTION
-        return total_reduction
-    except Exception as e:
-        raise ValueError(f"Lỗi khi tính giảm trừ: {e}")
+    BASE_SELF = 11_000_000
+    BASE_DEP = 4_400_000
+
+    if not isinstance(dependents, int):
+        raise ValueError("Số người phụ thuộc phải là số nguyên (int).")
+    if dependents < 0:
+        raise ValueError("Số người phụ thuộc không được là số âm.")
+
+    return BASE_SELF + dependents * BASE_DEP
 
 
-def calculatePersonalTax(grossSalary: Union[int, float], dependents: int) -> int:
+def calculatePersonalTax(grossSalary, dependents):
     """
-    Tính thuế TNCN theo lũy tiến từng phần.
+    Tính thuế TNCN dựa trên bảng thuế lũy tiến từng phần gồm 7 bậc, kiểu Việt Nam.
+    Trả về số tiền thuế thu nhập cá nhân phải đóng (làm tròn int).
     """
-    try:
-        if not isinstance(grossSalary, (int, float)) or grossSalary < 0:
-            raise ValueError("grossSalary phải là số không âm.")
-        if not isinstance(dependents, int) or dependents < 0:
-            raise ValueError("Số người phụ thuộc phải là số nguyên không âm.")
+    # Biểu thuế (từng phần): [(giới hạn, suất thuế), ...] các mức là giới hạn trên của từng bậc
+    BRACKETS = [
+        (5_000_000, 0.05),
+        (10_000_000, 0.10),
+        (18_000_000, 0.15),
+        (32_000_000, 0.20),
+        (52_000_000, 0.25),
+        (80_000_000, 0.30),
+        (float('inf'), 0.35)
+    ]
 
-        # Tính các khoản giảm trừ
-        insurance = calculateInsurance(grossSalary)
-        reductions = calculateReductions(dependents)
+    # Kiểm tra đầu vào
+    if not isinstance(grossSalary, (int, float)) or isinstance(grossSalary, bool):
+        raise ValueError("grossSalary phải là số (int hoặc float).")
+    if not isinstance(dependents, int):
+        raise ValueError("dependents phải là số nguyên (int).")
+    if grossSalary < 0:
+        raise ValueError("grossSalary không được là số âm.")
+    if dependents < 0:
+        raise ValueError("dependents không được là số âm.")
 
-        # Thu nhập tính thuế = Lương gross - bảo hiểm - giảm trừ bản thân và người phụ thuộc
-        taxable_income = grossSalary - insurance - reductions
-        if taxable_income <= 0:
-            return 0
+    # Bước 1: Tính các khoản giảm trừ & bảo hiểm
+    insurance = calculateInsurance(grossSalary)
+    reductions = calculateReductions(dependents)
 
-        tax = 0
-        remaining = taxable_income
-        for lower, upper, rate, deduction in PERSONAL_TAX_BRACKETS:
-            if taxable_income > lower:
-                income_in_bracket = min(remaining, upper - lower)
-                if income_in_bracket <= 0:
-                    continue
-                tax_in_bracket = income_in_bracket * rate
-                tax += tax_in_bracket
-                remaining -= income_in_bracket
-                if remaining <= 0:
-                    break
-        return int(round(tax))
-    except Exception as e:
-        raise ValueError(f"Lỗi khi tính thuế thu nhập cá nhân: {e}")
+    # Bước 2: Thu nhập tính thuế
+    taxable_income = grossSalary - insurance - reductions
+
+    if taxable_income <= 0:
+        return 0
+
+    # Bước 3: Tính thuế theo lũy tiến từng phần
+    tax = 0.0
+    remaining = taxable_income
+    lower = 0
+
+    for upper, rate in BRACKETS:
+        amount = min(remaining, upper - lower)
+        if amount > 0:
+            tax += amount * rate
+            remaining -= amount
+        lower = upper
+        if remaining <= 0:
+            break
+
+    return int(round(tax))
